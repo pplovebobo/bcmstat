@@ -1592,31 +1592,49 @@ def print_header(columns, sysinfo):
     elif col == "Vcore":
       header_parts.append("Vcore")
     elif col == "ARM":
-      header_parts.append("ARM MHz")
+      header_parts.append("ARM")
     elif col == "Core":
-      header_parts.append("Core MHz")
+      header_parts.append("Core")
     elif col == "H264":
-      header_parts.append("H264 MHz")
+      header_parts.append("H264")
     elif col == "V3D":
-      header_parts.append("V3D MHz")
+      header_parts.append("V3D")
     elif col == "ISP":
-      header_parts.append("ISP MHz")
+      header_parts.append("ISP")
     elif col == "TempCore":
-      header_parts.append("Temp°C")
+      header_parts.append("Temp")
     elif col == "TempPMIC":
-      header_parts.append("PMIC°C")
+      header_parts.append("PMIC")
     elif col == "IRQ":
       header_parts.append("IRQ/s")
     elif col == "RX":
       header_parts.append("RX B/s")
     elif col == "TX":
       header_parts.append("TX B/s")
-    elif col in ["CPU", "CPUuser", "CPUnice", "CPUsys", "CPUidle", "CPUiowt", "CPUirq", "CPUs/irq", "CPUtotal"]:
-      header_parts.append(col + "%")
+    elif col == "CPU":
+      header_parts.append("CPU%")
+    elif col == "CPUuser":
+      header_parts.append("user%")
+    elif col == "CPUnice":
+      header_parts.append("nice%")
+    elif col == "CPUsys":
+      header_parts.append("sys%")
+    elif col == "CPUidle":
+      header_parts.append("idle%")
+    elif col == "CPUiowt":
+      header_parts.append("iowt%")
+    elif col == "CPUirq":
+      header_parts.append("irq%")
+    elif col == "CPUs/irq":
+      header_parts.append("sirq%")
+    elif col == "CPUtotal":
+      header_parts.append("total%")
     elif col == "GPUfree":
       header_parts.append("GPU MB")
-    elif col in ["MEMfree", "MEMused"]:
-      header_parts.append(col.replace("MEM", "MEM "))
+    elif col == "MEMfree":
+      header_parts.append("MEMfree")
+    elif col == "MEMused":
+      header_parts.append("MEMused")
     elif col == "MEMdelta":
       header_parts.append("ΔMem")
     elif col == "MEMaccum":
@@ -1636,62 +1654,95 @@ def print_data_line(columns, sysinfo, bcm, irq, net, cpu, cpusimple, cores, mem,
       flags += "U" if th["under-voltage"][0] else ("u" if th["under-voltage"][1] else " ")
       flags += "F" if th["arm-capped"][0] else ("f" if th["arm-capped"][1] else " ")
       flags += "T" if th["throttled"][0] else ("t" if th["throttled"][1] else " ")
-      data_parts.append(flags)
+      data_parts.append(f"{flags:>8}")
     elif col == "Vcore" and bcm[0][0] != 0:
-      data_parts.append(f"{bcm[0][1][9]}")
+      data_parts.append(f"{bcm[0][1][9]:>8}")
     elif col == "ARM" and bcm[0][0] != 0:
       freq = int(bcm[0][1][0] / 1e6)
       limits = sysinfo["limits"]["arm"]
-      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+      formatted = colourise(freq, "%d", limits[0], None, limits[1], False)
+      data_parts.append(f"{formatted:>8}")
     elif col == "Core" and bcm[0][0] != 0:
       freq = int(bcm[0][1][1] / 1e6)
       limits = sysinfo["limits"]["core"]
-      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+      formatted = colourise(freq, "%d", limits[0], None, limits[1], False)
+      data_parts.append(f"{formatted:>8}")
     elif col == "H264" and bcm[0][0] != 0:
       freq = int(bcm[0][1][2] / 1e6)
       limits = sysinfo["limits"]["h264"]
-      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+      formatted = colourise(freq, "%d", limits[0], None, limits[1], False)
+      data_parts.append(f"{formatted:>8}")
     elif col == "V3D" and bcm[0][0] != 0:
       freq = int(bcm[0][1][3] / 1e6)
       limits = sysinfo["limits"]["v3d"]
-      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+      formatted = colourise(freq, "%d", limits[0], None, limits[1], False)
+      data_parts.append(f"{formatted:>8}")
     elif col == "ISP" and bcm[0][0] != 0:
       freq = int(bcm[0][1][4] / 1e6)
       limits = sysinfo["limits"]["isp"]
-      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+      formatted = colourise(freq, "%d", limits[0], None, limits[1], False)
+      data_parts.append(f"{formatted:>8}")
     elif col == "TempCore" and bcm[0][0] != 0:
       temp = bcm[0][1][5] / 1000 if bcm[0][1][5] else 0
-      data_parts.append(colourise(temp, "%4.1f", 50, 70, 80, False))
+      formatted = colourise(temp, "%.1f", 50, 70, 80, False)
+      data_parts.append(f"{formatted:>8}")
     elif col == "TempPMIC" and bcm[0][0] != 0:
       temp = bcm[0][1][7] if bcm[0][1][7] else 0
-      data_parts.append(colourise(temp, "%4.1f", 50, 70, 80, False))
+      formatted = colourise(temp, "%.1f", 50, 70, 80, False)
+      data_parts.append(f"{formatted:>8}")
     elif col == "IRQ" and irq[0][0] != 0:
       data_parts.append(f"{irq[0][1][0]:>8d}")
     elif col == "RX" and net[0][0] != 0:
       if human_readable:
-        data_parts.append(format_bytes(net[0][1][0]))
+        data_parts.append(f"{format_bytes(net[0][1][0]):>8}")
       else:
         data_parts.append(f"{net[0][1][0]:>8d}")
     elif col == "TX" and net[0][0] != 0:
       if human_readable:
-        data_parts.append(format_bytes(net[0][1][1]))
+        data_parts.append(f"{format_bytes(net[0][1][1]):>8}")
       else:
         data_parts.append(f"{net[0][1][1]:>8d}")
+    elif col == "CPU" and cpu[0][0] != 0:
+      data_parts.append(f"{cpu[0][1][0]:>7.2f}")
+    elif col == "CPUuser" and cpu[0][0] != 0:
+      data_parts.append(f"{cpu[0][1][0]:>7.2f}")
+    elif col == "CPUnice" and cpu[0][0] != 0:
+      data_parts.append(f"{cpu[0][1][1]:>7.2f}")
+    elif col == "CPUsys" and cpu[0][0] != 0:
+      data_parts.append(f"{cpu[0][1][2]:>7.2f}")
+    elif col == "CPUidle" and cpu[0][0] != 0:
+      data_parts.append(f"{cpu[0][1][3]:>7.2f}")
+    elif col == "CPUiowt" and cpu[0][0] != 0:
+      data_parts.append(f"{cpu[0][1][4]:>7.2f}")
+    elif col == "CPUirq" and cpu[0][0] != 0:
+      data_parts.append(f"{cpu[0][1][5]:>7.2f}")
+    elif col == "CPUs/irq" and cpu[0][0] != 0:
+      data_parts.append(f"{cpu[0][1][6]:>7.2f}")
     elif col == "CPUtotal" and (cpu[0][0] != 0 or cpusimple[0][0] != 0):
       if cpusimple[0][0] != 0:
         total = cpusimple[0][1][3]
       else:
         total = cpu[0][1][7]
-      data_parts.append(colourise(total, "%6.2f", 25, 50, 75, False))
+      formatted = colourise(total, "%.2f", 25, 50, 75, False)
+      data_parts.append(f"{formatted:>8}")
+    elif col == "MEMfree" and mem[0][0] != 0:
+      data_parts.append(f"{mem[0][1][2]:>7.2f}")
     elif col == "MEMused" and mem[0][0] != 0:
-      data_parts.append(colourise(mem[0][1][2], "%6.2f", 25, 50, 75, False))
+      formatted = colourise(mem[0][1][2], "%.2f", 25, 50, 75, False)
+      data_parts.append(f"{formatted:>8}")
     elif col == "GPUfree" and gpu[0][0] != 0 and "reloc" in gpu[0][1]:
       free_mb = gpu[0][1]["reloc"][1] / (1024 * 1024)
-      data_parts.append(f"{free_mb:>6.1f}")
+      data_parts.append(f"{free_mb:>7.1f}")
+    elif col == "MEMdelta" and memdeltas[0][0] != 0:
+      delta = memdeltas[0][1][0]
+      data_parts.append(f"{delta:>8d}")
+    elif col == "MEMaccum" and memdeltas[0][0] != 0:
+      accum = memdeltas[0][1][2]
+      data_parts.append(f"{accum:>8d}")
     else:
       data_parts.append(" " * 8)
   
-  print(" | ".join(f"{part:>8}" for part in data_parts))
+  print(" | ".join(data_parts))
 
 def format_bytes(bytes_val):
   """Format bytes in human readable format"""
