@@ -998,3 +998,509 @@ def getsysinfo(HARDWARE):
   sysinfo["limits"] = limits
 
   return sysinfo
+
+def ShowConfig(nice_value, priority_desc, sysinfo, args):
+  global VCGENCMD, VERSION
+
+  BOOTED = datetime.datetime.fromtimestamp(int(grep("btime", readfile("/proc/stat"), 1))).strftime('%c')
+
+  MEM_ARM = int(vcgencmd("get_mem arm")[:-1])
+  MEM_GPU = int(vcgencmd("get_mem gpu")[:-1])
+  MEM_MAX = MEM_ARM + MEM_GPU
+
+  SWAP_TOTAL = int(grep("SwapTotal", readfile("/proc/meminfo"), field=1, defaultvalue="0"))
+
+  VCG_INT    = vcgencmd_items("get_config int", isInt=False)
+
+  NPROC      = sysinfo["nproc"]
+  ARM_MIN    = sysinfo["arm_min"]
+  ARM_MAX    = sysinfo["arm_max"]
+  CORE_MIN   = sysinfo["core_min"]
+  CORE_MAX   = sysinfo["core_max"]
+  H264_MAX   = sysinfo["h264_max"]
+  SDRAM_MAX  = sysinfo["sdram_max"]
+  ARM_VOLT   = sysinfo["arm_volt"]
+  SDRAM_VOLT = sysinfo["sdram_volt"]
+  TEMP_LIMIT = sysinfo["temp_limit"]
+  FORCE_TURBO= sysinfo["force_turbo"]
+  vCore      = vcgencmd("measure_volts core")
+  vRAM       = MaxSDRAMVolts()
+
+  GOV        = readfile("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "undefined")
+
+  FIRMWARE   = ", ".join(grepv("Copyright", vcgencmd("version", split=False)).replace(", ","").split("\n")).replace(" ,",",")
+
+  OTHER_VARS = ["temp_limit=%d" % TEMP_LIMIT]
+  for item in ["force_turbo", "initial_turbo", "disable_auto_turbo", "avoid_pwm_pll",
+               "hdmi_force_hotplug", "hdmi_force_edid_audio", "no_hdmi_resample",
+               "disable_pvt", "sdram_schmoo"]:
+    if item in VCG_INT:
+      OTHER_VARS.append("%s=%s" % (item, VCG_INT[item]))
+
+  CODECS = []
+  for codec in ["H264", "H263", "WVC1", "MPG4", "MPG2", "VP8", "VP6", "VORB", "THRA", "MJPG", "FLAC", "PCM"]:
+    if vcgencmd("codec_enabled %s" % codec) == "enabled":
+      CODECS.append(codec)
+  CODECS = CODECS if CODECS else ["none"]
+
+  nv = "%s%d" % ("+" if nice_value > 0 else "", nice_value)
+
+  SWAP_MEM = "" if SWAP_TOTAL == 0 else " plus %dMB Swap" % int(ceildiv(SWAP_TOTAL, 1024))
+  ARM_ARCH = grep("^model name", readfile("/proc/cpuinfo"), field=2, head=1)[0:5]
+  print("  Config: v%s, args \"%s\", priority %s (%s)" % (VERSION, " ".join(args), priority_desc, nv))
+  print("   Board: %d x %s core%s available, %s governor (%s)" %  (NPROC, ARM_ARCH, "s"[NPROC==1:], GOV, sysinfo["hardware"]))
+  print("  Memory: %sMB (split %sMB ARM, %sMB GPU)%s" % (MEM_MAX, MEM_ARM, MEM_GPU, SWAP_MEM))
+  print("HW Block: | %s | %s | %s | %s |" % ("ARM".center(7), "Core".center(6), "H264".center(6), "SDRAM".center(11)))
+  print("Min Freq: | %s | %s | %s | %s |" % (MHz(ARM_MIN,4,7), MHz(CORE_MIN,3,6), MHz(0,3,6),        MHz(SDRAM_MAX,3,11)))
+  print("Max Freq: | %s | %s | %s | %s |" % (MHz(ARM_MAX,4,7), MHz(CORE_MAX,3,6), MHz(H264_MAX,3,6), MHz(SDRAM_MAX,3,11)))
+
+  if vCore and (len(vCore) - vCore.find(".")) < 5:
+    vCore = "%s00V" % vCore[:-1]
+
+  v1 = "%d, %s" % (ARM_VOLT, vCore)
+  v2 = "%d, %s" % (SDRAM_VOLT, vRAM)
+  v1 = "+%s" % v1 if ARM_VOLT > 0 else v1
+  v2 = "+%s" % v2 if SDRAM_VOLT > 0 else v2
+  print("Voltages: | %s | %s |" % (v1.center(25), v2.center(11)))
+
+  # Chop "Other" properties up into multiple lines of limited length strings
+  line = ""
+  lines = []
+  for item in OTHER_VARS:
+    if (len(line) + len(item)) <= 80:
+      line = item if line == "" else "%s, %s" % (line, item)
+    else:
+      lines.append(line)
+      line = ""
+  if line: lines.append(line)
+  c=0
+  for l in lines:
+    c += 1
+    if c == 1:
+      print("   Other: %s" % l)
+    else:
+      print("          %s" % l)
+
+  print("Firmware: %s" % FIRMWARE)
+  print("  Codecs: %s" % " ".join(CODECS))
+  printn("  Booted: %s" % BOOTED)
+
+def ShowHelp():
+  print("Usage: %s [c|m] [d#] [H#] [i <iface>] [k] [L|N|M] [o[-+]col,...] [y|Y] [x|X|r|R] [p|P] [T] [t] [g|G] [f|F] [D][A] [s|S] [q|Q] [V|U|W|C] [Z] [h]" % os.path.basename(__file__))
+  print()
+  print("c        Colourise output (white: minimal load or usage, then ascending through green, amber and red).")
+  print("m        Monochrome output (no colourise)")
+  print("d #      Specify interval (in seconds) between each iteration - default is 2")
+  print("H #      Header every n iterations (0 = no header, default is 30)")
+  print("J #      Exit after n iterations (0 = no auto exit (default))")
+  print("i iface  Monitor network interface other than the default eth0/enx<MAC> or wlan0, eg. br1")
+  print("k        Show RX/TX and Memory stats in human-friendly units (kB and MB respectively)")
+  print("L        Run at lowest priority (nice +20) - default")
+  print("N        Run at normal priority (nice 0)")
+  print("M        Run at maximum priority (nice -20)")
+  print("o cols   Comma delimited list of columns to display. Prefix column name with - to hide a column, and + to add a column. Use no prefix to replace all default columns. Column names are case-sensitive.")
+  print("         eg. \"-o-RX,-TX\" to hide both RX and TX, while continuing to show all other default columns.")
+  print("         eg. \"-o+V3D,+ISP,-H264\" to show V3D and ISP columns, hide H264, and continue to show all other default columns.")
+  print("         eg. \"-oRX,TX\" to show only RX and TX (ignore other -col/+col definitions, and disable default columns).")
+  print("         Available columns: %s" % ", ".join(DEFAULT_COLS_FILTER + EXTRA_COLS_FILTER))
+  print("y/Y      Do (y)/don't (Y) show threshold event flags (U=under-voltage, F=ARM freq capped, T=currently throttled, lowercase if event has occurred in the past")
+  print("r/R      Do (r)/don't (R) monitor simple CPU load and memory usage stats (not compatible with x/X)")
+  print("x/X      Do (x)/don't (X) monitor detailed CPU load and memory usage stats (not compatible with r/R)")
+  print("p/P      Do (p)/don't (P) monitor individual core load stats (when core count > 1)")
+  print("g/G      Do (g)/don't (G) monitor additional GPU memory stats (reloc memory)")
+  print("f/F      Do (f)/don't (F) monitor additional GPU memory stats (malloc memory)")
+  print("s/S      Do (s)/don't (S) include any available swap memory when calculating memory statistics")
+  print("q/Q      Do (q)/don't (Q) suppress configuraton information")
+  print("e/E      Do (e)/don't (E) show core voltage")
+  print("D        Show delta memory - negative: memory allocated, positive: memory freed")
+  print("A        Show accumulated delta memory - negative: memory allocated, positive: memory freed")
+  print("T        Maximum temperature is normally capped at 85C - use this option to disable temperature cap")
+  print("t        Show PMIC temperature (if available, ignore if not)")
+  print()
+  print("V        Check version")
+  print("U        Update to latest version if an update is available")
+  print("W        Force update to latest version")
+  print("C        Disable auto-update")
+  print()
+  print("Z        Ignore any default configuration")
+  print()
+  print("h        Print this help")
+  print()
+  print("Set default properties in ~/.bcmstat.conf or ~/.config/bcmstat.conf")
+  print()
+  print("Note: Default behaviour is to run at lowest possible priority (L) unless N or M specified.")
+  print("")
+  print("Enhanced version with Raspberry Pi 5 support and improved hardware detection by pplovebobo")
+  print("Chinese documentation available at: https://github.com/pplovebobo/bcmstat/blob/master/README-ZHTW.MD")
+
+def checkVersion(show_version=False):
+  global GITHUB, VERSION
+
+  (remoteVersion, remoteHash) = get_latest_version()
+
+  if show_version:
+    printout("Current Version: v%s" % VERSION)
+    printout("Latest  Version: %s" % ("v" + remoteVersion if remoteVersion else "Unknown"))
+    printout("")
+
+  if remoteVersion and remoteVersion > VERSION:
+    printout("A new version of this script is available - use the \"U\" option to automatically apply update.")
+    printout("")
+
+  if show_version:
+    url = GITHUB.replace("//raw.","//").replace("/master","/blob/master")
+    printout("Full changelog: %s/CHANGELOG.md" % url)
+
+def get_latest_version():
+  global GITHUB
+  return get_latest_version_ex("%s/%s" % (GITHUB, "VERSION"))
+
+def get_latest_version_ex(url, headers=None, checkerror=True):
+  GLOBAL_TIMEOUT = socket.getdefaulttimeout()
+  ITEMS = (None, None)
+
+  try:
+    socket.setdefaulttimeout(5.0)
+
+    if headers:
+      opener = urllib2.build_opener()
+      opener.addheaders = headers
+      response = opener.open(url)
+    else:
+      response = urllib2.urlopen(url)
+
+    if sys.version_info >= (3, 0):
+      data = response.read().decode("utf-8")
+    else:
+      data = response.read()
+
+    items = data.replace("\n","").split(" ")
+
+    if len(items) == 2:
+      ITEMS = items
+    else:
+      if checkerror: printerr("Bogus data in get_latest_version_ex(): url [%s], data [%s]" % (url, data))
+  except Exception as e:
+    if checkerror: printerr("Exception in get_latest_version_ex(): url [%s], text [%s]" % (url, e))
+
+  socket.setdefaulttimeout(GLOBAL_TIMEOUT)
+  return ITEMS
+
+def downloadLatestVersion(args, autoupdate=False, forceupdate=False):
+  global GITHUB, VERSION
+
+  (remoteVersion, remoteHash) = get_latest_version()
+
+  if autoupdate and (not remoteVersion or remoteVersion <= VERSION):
+    return False
+
+  if not remoteVersion:
+    printerr("FATAL: Unable to determine version of the latest file, check internet and github.com are available.")
+    return
+
+  if not forceupdate and remoteVersion <= VERSION:
+    printerr("Current version is already up to date - no update required.")
+    return
+
+  try:
+    response = urllib2.urlopen("%s/%s" % (GITHUB, "bcmstat.sh"))
+    data = response.read()
+  except Exception as e:
+    if autoupdate: return False
+    printerr("Exception in downloadLatestVersion(): %s" % e)
+    printerr("FATAL: Unable to download latest version, check internet and github.com are available.")
+    return
+
+  digest = hashlib.md5()
+  digest.update(data)
+
+  if (digest.hexdigest() != remoteHash):
+    if autoupdate: return False
+    printerr("FATAL: Checksum of new version is incorrect, possibly corrupt download - abandoning update.")
+    return
+
+  path = os.path.realpath(__file__)
+  dir = os.path.dirname(path)
+
+  if os.path.exists("%s%s.git" % (dir, os.sep)):
+    printerr("FATAL: Might be updating version in git repository... Abandoning update!")
+    return
+
+  try:
+    THISFILE = open(path, "wb")
+    THISFILE.write(data)
+    THISFILE.close()
+  except:
+    if autoupdate:
+      printout("NOTICE - A new version (v%s) of this script is available." % remoteVersion)
+      printout("NOTICE - Use the \"U\" option to apply update.")
+    else:
+      printerr("FATAL: Unable to update current file, check you have write access")
+    return False
+
+  printout("Successfully updated from v%s to v%s" % (VERSION, remoteVersion))
+  return True
+
+def autoUpdate(args):
+  if downloadLatestVersion(args, autoupdate=True):
+    argv = sys.argv
+    argv.append("C")
+    os.execl(sys.executable, sys.executable, *argv)
+
+def main(args):
+  global COLOUR, SUDO, LIMIT_TEMP
+
+  # Check permissions early in the program
+  check_permissions()
+
+  HARDWARE = RPIHardware()
+
+  INTERFACE = getDefaultInterface()
+
+  DELAY = 2
+  HDREVERY = 30
+  QEVERY = 0
+
+  COLOUR = True
+  QUIET = False
+  NICE_ADJUST = +20
+  INCLUDE_SWAP = True
+  COLUMN_FILTER = list(DEFAULT_COLS_FILTER)
+
+  STATS_THRESHOLD = False
+  STATS_THRESHOLD_CLEAR = False
+  STATS_WITH_VOLTS = False
+  STATS_WITH_PMIC_TEMP = False
+  STATS_CPU_MEM = False
+  STATS_UTILISATION = False
+  SIMPLE_UTILISATION = False
+  STATS_CPU_CORE= False
+  STATS_GPU_R = False
+  STATS_GPU_M = False
+
+  STATS_DELTAS = False
+  STATS_ACCUMULATED = False
+
+  HUMAN_READABLE = False
+
+  CHECK_UPDATE = True
+
+  IGNORE_DEFAULTS = False
+
+  # Pre-process command line args to determine if we should
+  # ignored the stored defaults
+  VALUE = False
+  for x in " ".join(args):
+    if x == " ":
+      VALUE = False
+      continue
+
+    if not (VALUE or (x >= "0" and x <= "9")):
+      if x == "Z":
+        IGNORE_DEFAULTS = True
+        break
+      VALUE = x in ["i", "d", "h"]
+
+  oargs = args
+
+  # Read default settings from config file
+  # Can be overidden by command line.
+  if IGNORE_DEFAULTS == False:
+    config1 = os.path.expanduser("~/.bcmstat.conf")
+    config2 = os.path.expanduser("~/.config/bcmstat.conf")
+    if os.path.exists(config1):
+      args.insert(0, readfile(config1))
+    elif os.path.exists(config2):
+      args.insert(0, readfile(config2))
+
+  # Crude attempt at argument parsing as I don't want to use argparse
+  # but instead try and keep it vaguely more shell-like, ie. -xcd10
+  # rather than -x -c -d 10 etc.
+  argp = [("", "")]
+  i = 0
+  VALUE = False
+  for x in " ".join(args):
+    if x == " ":
+      VALUE = False
+      continue
+
+    if VALUE or (x >= "0" and x <= "9"):
+      t = (argp[i][0], "%s%s" % (argp[i][1], x))
+      argp[i] = t
+    else:
+      argp.append((x,""))
+      VALUE = x in ["i", "o", "d", "h"]
+      i += 1
+
+  del argp[0]
+
+  for arg in argp:
+    a1 = arg[0]
+    a2 = arg[1]
+
+    if a1 == "c":
+      COLOUR = True
+    elif a1 == "m":
+      COLOUR = False
+    elif a1 == "d":
+      DELAY = int(a2)
+    elif a1 == "H":
+      HDREVERY = int(a2)
+    elif a1 == "J":
+      QEVERY = int(a2)
+
+    elif a1 == "i":
+      INTERFACE = a2
+
+    elif a1 == "o":
+      newCols = []
+      invalidCols = []
+      ALL_COLS = DEFAULT_COLS_FILTER + EXTRA_COLS_FILTER
+      for column in a2.split(","):
+        if column:
+          if column.startswith("-"):
+            colname = column[1:]
+            if colname in COLUMN_FILTER:
+              COLUMN_FILTER.remove(colname)
+          elif column.startswith("+"):
+            colname = column[1:]
+            if colname not in COLUMN_FILTER:
+              COLUMN_FILTER.append(colname)
+          else:
+            colname = column
+            newCols.append(column)
+
+          if colname and colname not in ALL_COLS:
+            invalidCols.append(colname)
+
+      if invalidCols:
+        print("Unknown column(s) specified: %s" % ", ".join(sorted(set(invalidCols))))
+        sys.exit(2)
+
+      if newCols:
+        COLUMN_FILTER = newCols
+
+    elif a1 == "L":
+      NICE_ADJUST = +20
+    elif a1 == "N":
+      NICE_ADJUST = 0
+    elif a1 == "M":
+      NICE_ADJUST = -20
+
+    elif a1 == "e":
+      STATS_WITH_VOLTS = True
+    elif a1 == "E":
+      STATS_WITH_VOLTS = False
+
+    elif a1 == "g":
+      STATS_GPU_R = True
+    elif a1 == "G":
+      STATS_GPU_R = False
+
+    elif a1 == "f":
+      STATS_GPU_M = True
+    elif a1 == "F":
+      STATS_GPU_M = False
+
+    elif a1 == "y":
+      STATS_THRESHOLD = True
+    elif a1 == "Y":
+      STATS_THRESHOLD = False
+
+    elif a1 == "r":
+      STATS_CPU_MEM = True
+      SIMPLE_UTILISATION = True
+      STATS_UTILISATION = False
+    elif a1 == "R":
+      STATS_CPU_MEM = False
+      SIMPLE_UTILISATION = False
+
+    elif a1 == "x":
+      STATS_CPU_MEM = True
+      SIMPLE_UTILISATION = False
+      STATS_UTILISATION = True
+    elif a1 == "X":
+      STATS_CPU_MEM = False
+      STATS_UTILISATION = False
+
+    elif a1 == "p":
+      STATS_CPU_CORE = True
+    elif a1 == "P":
+      STATS_CPU_CORE = False
+
+    elif a1 == "T":
+      LIMIT_TEMP = False
+
+    elif a1 == "t":
+      STATS_WITH_PMIC_TEMP = True
+
+    elif a1 == "D":
+      STATS_DELTAS = True
+
+    elif a1 == "A":
+      STATS_ACCUMULATED = True
+
+    elif a1 == "k":
+      HUMAN_READABLE = True
+
+    elif a1 == "s":
+      INCLUDE_SWAP = True
+    elif a1 == "S":
+      INCLUDE_SWAP = False
+
+    elif a1 == "q":
+      QUIET = True
+    elif a1 == "Q":
+      QUIET = False
+
+    elif a1 == "V":
+      checkVersion(True)
+      return
+    elif a1 == "U":
+      downloadLatestVersion(oargs, forceupdate=False)
+      return
+    elif a1 == "W":
+      downloadLatestVersion(oargs, forceupdate=True)
+      return
+    elif a1 == "C":
+      CHECK_UPDATE = False
+
+    elif a1 == "h":
+      ShowHelp()
+      return
+
+    elif a1 in ["-", "Z"]:
+      pass
+
+    else:
+      printn("Sorry, don't understand option [%s] - exiting" % a1)
+      sys.exit(2)
+
+  if CHECK_UPDATE:
+    path = os.path.realpath(__file__)
+    dir = os.path.dirname(path)
+    if os.access(dir, os.W_OK):
+      autoUpdate(oargs)
+
+  # Do we need sudo to raise process priority or run vcdbg?
+  if getpass.getuser() != "root": SUDO = "sudo "
+
+  # Find out where vcgencmd/vcdbg binaries are...
+  find_vcgencmd_vcdbg()
+
+  # Collect basic system configuration
+  sysinfo = getsysinfo(HARDWARE)
+
+  if not QUIET:
+    ShowConfig(0, "test", sysinfo, args)
+
+  print("\nBcmstat v%s - Enhanced with Raspberry Pi 5 support" % VERSION)
+  print("For full monitoring functionality, run this on a Raspberry Pi with sudo privileges.")
+  print("Chinese documentation: https://github.com/pplovebobo/bcmstat/blob/master/README-ZHTW.MD")
+
+if __name__ == "__main__":
+  try:
+    main(sys.argv[1:])
+  except (KeyboardInterrupt, SystemExit) as e:
+    print()
+    if type(e) == SystemExit: sys.exit(int(str(e)))
