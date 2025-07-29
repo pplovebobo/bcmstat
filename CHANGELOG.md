@@ -1,5 +1,19 @@
 # Changelog
 
+## Version 0.6.0 (05/07/2025)
+* Add: Raspberry Pi 5 and Pi5+ support with BCM2711/BCM2712 processors
+* Add: Extended memory support up to 32GB (previously limited to 8GB)
+* Add: Support for Pi0 2W, Pi400, CM4, CM4S, and CM5 models
+* Add: Enhanced hardware detection for Pi4 variants (Rev1.1, Rev1.2, Rev1.4, Rev1.5)
+* Add: Improved permission checking and sudo prompts for better user experience
+* Add: Comprehensive error handling for vcgencmd and system file access
+* Add: Automatic detection of video group membership for GPU access
+* Update: ARM frequency defaults for Pi5 (800MHz) and SDRAM frequency (4267MHz)
+* Update: Extended manufacturer list and PCB identification codes
+* Update: Updated repository and download links to pplovebobo/bcmstat
+* Fix: Python 3 compatibility improvements for newer Raspberry Pi OS versions
+* Fix: Enhanced error messages when insufficient privileges are detected
+
 ## Version 0.5.5 (14/05/2020)
 * Add: configure columns with `-o` option. Closes #17
 * Add: V3D and ISP frequency support (enable via `-o+V3D,+ISP`). Closes #19

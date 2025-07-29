@@ -4,6 +4,7 @@
 ################################################################################
 #
 #  Copyright (C) 2014 Neil MacLeod (bcmstat.sh@nmacleod.com)
+#  Updated (C) 2025 pplovebobo (https://github.com/pplovebobo/bcmstat)
 #
 #  This Program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -19,11 +20,11 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
-# Simple utility to monitor Raspberry Pi BCM283X SoC, network, CPU and memory statistics
+# Simple utility to monitor Raspberry Pi BCM283X+ SoC, network, CPU and memory statistics
 #
 # Usage:
 #
-#   ./bcmstat.py xcd10
+#   ./bcmstat.sh xcd10
 #
 # Help available with -h.
 #
@@ -31,6 +32,9 @@
 # but this can mean slow responses. To ensure more timely responses, use N
 # to run at default/normal priority (ie. don't re-nice), or M to run at
 # maximum priority (and minimum niceness, -20).
+#
+# For full functionality on newer Raspberry Pi models, run with sudo:
+#   sudo python bcmstat.sh
 #
 ################################################################################
 from __future__ import print_function
@@ -42,8 +46,8 @@ if sys.version_info >= (3, 0):
 else:
   import urllib2
 
-GITHUB = "https://raw.github.com/MilhouseVH/bcmstat/master"
-VERSION = "0.5.5"
+GITHUB = "https://raw.github.com/pplovebobo/bcmstat/master"
+VERSION = "0.6.0"
 
 VCGENCMD = None
 VCDBGCMD = None
@@ -88,13 +92,17 @@ class RPIHardware():
     self.hardware_raw = {"rev_code": 0, "bits": "", "pcb": 0, "user": 0, "new": 0, "memsize": 0, "manufacturer": 0, "processor": 0, "type": 0, "rev": 0}
     self.hardware_fmt = {"bits": "", "pcb": "", "new": "", "memsize": "", "manufacturer": "", "processor": "", "type": "", "rev": ""}
 
-    # Note: Some of these memory sizes and processors are fictional and relate to unannounced products - logic would
-    #       dictate such products may exist at some point in the future, but it's only guesswork.
-    self.memsizes = ["256MB", "512MB", "1GB", "2GB", "4GB", "8GB"]
-    self.manufacturers = ["Sony UK", "Egoman", "Embest", "Sony Japan", "Embest", "Stadium"]
-    self.processors = ["2835", "2836", "2837", "2838", "2839", "2840"]
-    self.models = ["Model A", "Model B", "Model A+", "Model B+", "Pi2 Model B", "Alpha", "CM1", "Unknown", "Pi3", "Pi0", "CM3", "Unknown", "Pi0 W", "Pi3 Model B+", "Pi3 Model A+", "Unknown", "CM3+", "Pi4 Model B"]
-    self.pcbs = ["Unknown", "Pi3 Rev1.0", "Pi3 Rev1.2", "Pi2 2837 Rev1.1", "Pi2 2836", "Pi1 B+ Rev 1.1", "Pi0", "Pi1 B Rev2.0", "Pi2 (2837) Rev1.0", "Pi0 W", "Pi2 (2837) Rev1.2", "Pi3 B+"]
+    # Note: Memory sizes and processors updated to support current and future Raspberry Pi models
+    self.memsizes = ["256MB", "512MB", "1GB", "2GB", "4GB", "8GB", "16GB", "32GB"]
+    self.manufacturers = ["Sony UK", "Egoman", "Embest", "Sony Japan", "Embest", "Stadium", "Sony UK"]
+    self.processors = ["2835", "2836", "2837", "2838", "2711", "2712"]
+    self.models = ["Model A", "Model B", "Model A+", "Model B+", "Pi2 Model B", "Alpha", "CM1", "Unknown", 
+                   "Pi3", "Pi0", "CM3", "Unknown", "Pi0 W", "Pi3 Model B+", "Pi3 Model A+", "Unknown", 
+                   "CM3+", "Pi4 Model B", "Pi0 2W", "CM4", "Pi400", "Pi4 Model A", "Pi5 Model B", "CM5"]
+    self.pcbs = ["Unknown", "Pi3 Rev1.0", "Pi3 Rev1.2", "Pi2 2837 Rev1.1", "Pi2 2836", "Pi1 B+ Rev 1.1", 
+                 "Pi0", "Pi1 B Rev2.0", "Pi2 (2837) Rev1.0", "Pi0 W", "Pi2 (2837) Rev1.2", "Pi3 B+", 
+                 "Pi4 B Rev1.1", "Pi4 B Rev1.2", "Pi4 B Rev1.4", "Pi4 B Rev1.5", "Pi0 2W", "CM4 Rev1.0", 
+                 "Pi400", "CM4S", "Pi5 B Rev1.0"]
 
     self.set_rev_code(rev_code)
 #    self.dump()
@@ -135,16 +143,28 @@ class RPIHardware():
     return (bits & (((2 ** len) - 1) << lsb)) >> lsb
 
   def readfile(self, infile, isbinary=False):
-    if not isbinary:
-      if os.path.exists(infile):
-        with open(infile, 'r') as stream:
-          return stream.read()[:-1].split("\n")
+    try:
+      if not isbinary:
+        if os.path.exists(infile):
+          with open(infile, 'r') as stream:
+            return stream.read()[:-1].split("\n")
+        else:
+          return ""
       else:
-        return ""
-    else:
-      if os.path.exists(infile):
-        with open(infile, 'rb') as stream:
-          return stream.read()
+        if os.path.exists(infile):
+          with open(infile, 'rb') as stream:
+            return stream.read()
+        else:
+          return [-1]
+    except PermissionError:
+      printerr("WARNING: Cannot read %s - permission denied" % infile)
+      if not isbinary:
+        return [""]
+      else:
+        return [-1]
+    except Exception:
+      if not isbinary:
+        return [""]
       else:
         return [-1]
 
@@ -223,6 +243,24 @@ class RPIHardware():
       pcb = 10
     elif pcb_base == 0xa020d0:
       pcb = 11
+    elif (pcb_base & 0xfffff0) in [0xa03111, 0xa03112, 0xa03114, 0xa03115]:  # Pi4 variants
+      pcb = 12  # Pi4 B Rev1.1
+      if (pcb_base & 0xf) == 2:
+        pcb = 13  # Pi4 B Rev1.2
+      elif (pcb_base & 0xf) == 4:
+        pcb = 14  # Pi4 B Rev1.4
+      elif (pcb_base & 0xf) == 5:
+        pcb = 15  # Pi4 B Rev1.5
+    elif (pcb_base & 0xfffff0) == 0x902120:  # Pi0 2W
+      pcb = 16
+    elif (pcb_base & 0xfffff0) in [0xa03140, 0xa03141]:  # CM4
+      pcb = 17
+    elif pcb_base == 0xc03130:  # Pi400
+      pcb = 18
+    elif pcb_base == 0xd03140:  # CM4S
+      pcb = 19
+    elif (pcb_base & 0xfffff0) in [0xc04170, 0xd04170]:  # Pi5
+      pcb = 20
     else:
       pcb = 0
     self.hardware_raw["pcb"] = pcb
@@ -258,6 +296,10 @@ class RPIHardware():
       return "RPi4"
     elif self.hardware_raw["processor"] == 4:
       return "RPi5"
+    elif self.hardware_raw["processor"] == 5:
+      return "RPi5+"
+    else:
+      return "RPiUnknown"
 
   def GetBoardPCB(self):
     return self.hardware_fmt["pcb"]
@@ -334,11 +376,63 @@ def runcommand(command, ignore_error=False):
       return subprocess.check_output(command.split(" "), stderr=subprocess.STDOUT).decode("utf-8")[:-1]
     else:
       return subprocess.check_output(command.split(" "), stderr=subprocess.STDOUT)[:-1]
-  except:
+  except subprocess.CalledProcessError as e:
     if ignore_error:
       return None
     else:
+      # Check if it's a permission error
+      if "Permission denied" in str(e.output) or e.returncode == 126:
+        printerr("ERROR: Permission denied. Please run with sudo:")
+        printerr("sudo python %s" % " ".join(sys.argv))
+        sys.exit(1)
       raise
+  except Exception as e:
+    if ignore_error:
+      return None
+    else:
+      # Check for common permission-related errors
+      if "Permission denied" in str(e):
+        printerr("ERROR: Permission denied. Please run with sudo:")
+        printerr("sudo python %s" % " ".join(sys.argv))
+        sys.exit(1)
+      raise
+
+def test_vcgencmd_access():
+  """Test if vcgencmd is accessible with current permissions"""
+  global VCGENCMD
+  try:
+    if VCGENCMD:
+      # Try a simple vcgencmd command to test access
+      runcommand("%s version" % VCGENCMD)
+      return True
+  except:
+    return False
+  return False
+
+def check_permissions():
+  """Check if the script has necessary permissions and provide helpful messages"""
+  current_user = getpass.getuser()
+  
+  # Check if running as root
+  if current_user == "root":
+    return True
+    
+  # Check if user is in video group (common requirement for GPU access)
+  try:
+    import grp
+    video_group = grp.getgrnam('video')
+    if current_user in video_group.gr_mem:
+      return True
+  except:
+    pass
+    
+  # If we reach here, suggest running with sudo
+  printerr("NOTICE: For optimal functionality, this script should be run with elevated privileges.")
+  printerr("If you encounter permission errors, please run:")
+  printerr("sudo python %s" % " ".join(sys.argv))
+  printerr("")
+  
+  return False
 
 def find_vcgencmd_vcdbg():
   global VCGENCMD, VCDBGCMD, VCGENCMD_GET_MEM
@@ -353,18 +447,34 @@ def find_vcgencmd_vcdbg():
       VCDBGCMD = file
       break
 
+  # Check if vcgencmd is accessible and has required permissions
+  if VCGENCMD and not test_vcgencmd_access():
+    printerr("WARNING: vcgencmd found but insufficient permissions.")
+    printerr("For full functionality, please run with sudo:")
+    printerr("sudo python %s" % " ".join(sys.argv))
+
   # Determine if we have reloc/malloc get_mem capability
   VCGENCMD_GET_MEM = False
   if VCGENCMD:
-    if vcgencmd("get_mem reloc_total") != "0M" or vcgencmd("get_mem reloc") != "0M":
-      VCGENCMD_GET_MEM = True
+    try:
+      if vcgencmd("get_mem reloc_total") != "0M" or vcgencmd("get_mem reloc") != "0M":
+        VCGENCMD_GET_MEM = True
+    except:
+      pass
 
 def vcgencmd(args, split=True):
   global VCGENCMD
-  if split:
-    return grep("", runcommand("%s %s" % (VCGENCMD, args)), 1, split_char="=")
-  else:
-    return runcommand("%s %s" % (VCGENCMD, args))
+  try:
+    if split:
+      return grep("", runcommand("%s %s" % (VCGENCMD, args)), 1, split_char="=")
+    else:
+      return runcommand("%s %s" % (VCGENCMD, args))
+  except Exception as e:
+    if "Permission denied" in str(e):
+      printerr("ERROR: Cannot access GPU. Please run with sudo:")
+      printerr("sudo python %s" % " ".join(sys.argv))
+      sys.exit(1)
+    raise
 
 def vcgencmd_items(args, isInt=False):
   d = {}
@@ -380,13 +490,28 @@ def vcgencmd_items(args, isInt=False):
 
 def vcdbg(args):
   global VCDBGCMD, SUDO
-  return runcommand("%s%s %s" % (SUDO, VCDBGCMD, args))
+  try:
+    return runcommand("%s%s %s" % (SUDO, VCDBGCMD, args))
+  except Exception as e:
+    if "Permission denied" in str(e):
+      printerr("ERROR: Cannot access GPU debug interface. Please run with sudo:")
+      printerr("sudo python %s" % " ".join(sys.argv))
+      sys.exit(1)
+    raise
 
 def readfile(infile, defaultval=""):
-  if os.path.exists(infile):
-    with open(infile, 'r') as stream:
-        return stream.read()[:-1]
-  else:
+  try:
+    if os.path.exists(infile):
+      with open(infile, 'r') as stream:
+          return stream.read()[:-1]
+    else:
+      return defaultval
+  except PermissionError:
+    printerr("WARNING: Cannot read %s - permission denied" % infile)
+    printerr("For full functionality, please run with sudo:")
+    printerr("sudo python %s" % " ".join(sys.argv))
+    return defaultval
+  except Exception:
     return defaultval
 
 def grep(match_string, input_string, field=None, head=None, tail=None, split_char=" ", case_sensitive=True, defaultvalue=None):
@@ -792,6 +917,12 @@ def getsysinfo(HARDWARE):
   elif RPI_MODEL == "RPi4":
     ARM_DEFAULT_IDLE = 600
     SDRAM_DEFAULT = 3200
+  elif RPI_MODEL == "RPi5":
+    ARM_DEFAULT_IDLE = 800
+    SDRAM_DEFAULT = 4267
+  elif RPI_MODEL == "RPi5+":
+    ARM_DEFAULT_IDLE = 800
+    SDRAM_DEFAULT = 4267
   else:
     ARM_DEFAULT_IDLE = 600
     SDRAM_DEFAULT = 450
@@ -1384,6 +1515,9 @@ def main(args):
   global COLOUR, SUDO, LIMIT_TEMP
   global PEAKVALUES
   global VCGENCMD_GET_MEM
+
+  # Check permissions early in the program
+  check_permissions()
 
   HARDWARE = RPIHardware()
 

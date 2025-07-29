@@ -1,37 +1,76 @@
 bcmstat
 =======
 
-Simple Raspberry Pi command line monitoring tool:
+Advanced Raspberry Pi command line monitoring tool with comprehensive hardware support:
 
-* CPU fequencies (ARM, Core, H264, V3D, ISP)
-* Temperature (current and peak) for Core and/or PMIC
-* IRQ/s
-* Network Rx/Tx
-* System utilisation (percentage user, nice, idle etc.)
-* CPU load (including individual cores when available)
-* GPU mem usage
-* RAM usage (with/without swap)
-* Memory leak detection (`D`/`A` options - instantaneous and accumulated memory deltas)
-* Undervoltage, ARM frequency cap and temperature throttle event monitoring
-* Customisable columns
+**Supported Hardware:**
+* Raspberry Pi 1, 2, 3, 4, 5, and Pi5+
+* Pi Zero, Pi Zero W, Pi Zero 2W
+* Compute Modules (CM1, CM3, CM3+, CM4, CM4S, CM5)
+* Pi400
+* Memory configurations up to 32GB RAM
 
-Tested with Raspbian, LibreELEC and OSMC/Raspbmc.
+**Monitoring Features:**
+* CPU frequencies (ARM, Core, H264, V3D, ISP)
+* Temperature monitoring (Core and PMIC with peak tracking)
+* IRQ/s and system interrupts
+* Network Rx/Tx statistics
+* Comprehensive system utilisation (user, nice, system, idle, iowait, irq)
+* Multi-core CPU load monitoring
+* GPU memory usage (reloc and malloc pools)
+* RAM usage with optional swap monitoring
+* Memory leak detection (`D`/`A` options - instantaneous and accumulated deltas)
+* Advanced hardware monitoring (undervoltage, frequency capping, thermal throttling)
+* Fully customisable column display
+
+**Enhanced Permission Handling:**
+* Automatic permission detection and helpful error messages
+* Clear sudo prompts when elevated privileges are required
+* Video group membership checking for optimal GPU access
+* Graceful degradation when some features require higher privileges
+
+Tested with modern Raspberry Pi OS, LibreELEC, and OSMC distributions.
 
 Displayed values can be coloured (white, green, amber and red) to highlight excess usage or resource depletion. Disable with `m` option.
 
-View available options with `-h`.
+View all available options with `-h`.
+
+**Important:** For full functionality on newer Raspberry Pi models, run with elevated privileges:
+```
+sudo python bcmstat.sh
+```
 
 Specify a default configuration in ~/.bcmstat.conf, eg:
 ```
 xgd10
 ```
 
-####Installing on the Pi:
+## Installation
 
-To install the latest version directly from this github repository:
+### Quick Install (Recommended)
+One-line installation script:
+```bash
+curl -sSL https://raw.githubusercontent.com/pplovebobo/bcmstat/master/install.sh | bash
 ```
-curl -Ls https://raw.githubusercontent.com/MilhouseVH/bcmstat/master/bcmstat.sh -o ~/bcmstat.sh
+
+### Manual Installation
+To install the latest version directly from this GitHub repository:
+```bash
+# Download the script
+curl -Ls https://raw.githubusercontent.com/pplovebobo/bcmstat/master/bcmstat.sh -o ~/bcmstat.sh
 chmod +x ~/bcmstat.sh
+
+# Run with full privileges for best results
+sudo python3 ~/bcmstat.sh
+```
+
+### Git Installation
+For developers who want to contribute:
+```bash
+git clone https://github.com/pplovebobo/bcmstat.git
+cd bcmstat
+chmod +x bcmstat.sh
+sudo python3 bcmstat.sh
 ```
 
 ######Example output:
