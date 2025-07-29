@@ -1492,11 +1492,215 @@ def main(args):
   sysinfo = getsysinfo(HARDWARE)
 
   if not QUIET:
-    ShowConfig(0, "test", sysinfo, args)
+    ShowConfig(NICE_ADJUST, {-20: "maximum", 0: "normal", 20: "lowest"}.get(NICE_ADJUST, "custom"), sysinfo, oargs)
+    print("")
 
-  print("\nBcmstat v%s - Enhanced with Raspberry Pi 5 support" % VERSION)
-  print("For full monitoring functionality, run this on a Raspberry Pi with sudo privileges.")
-  print("Chinese documentation: https://github.com/pplovebobo/bcmstat/blob/master/README-ZHTW.MD")
+  # Exit if only showing config
+  if not any(arg[0] for arg in argp if arg[0] not in ['-', 'Z', 'h', 'V', 'U', 'W', 'C']):
+    return
+
+  # Set process priority
+  try:
+    current_priority = os.getpriority(os.PRIO_PROCESS, 0)
+    if NICE_ADJUST != current_priority:
+      os.setpriority(os.PRIO_PROCESS, 0, NICE_ADJUST)
+  except:
+    pass
+
+  # Setup storage for historical data
+  IRQ        = [(0, 0), (0, 0), (0, 0)]
+  NET        = [(0, 0), (0, 0), (0, 0)]
+  BCM2835    = [(0, 0), (0, 0), (0, 0)]
+  PROC       = [(0, 0), (0, 0), (0, 0)]
+  CPU        = [(0, 0), (0, 0), (0, 0)]
+  CPUSIMPLE  = [(0, 0), (0, 0), (0, 0)]
+  CORES      = [(0, 0), (0, 0), (0, 0)]
+  MEM        = [(0, 0), (0, 0), (0, 0)]
+  GPU        = [(0, 0), (0, 0), (0, 0)]
+  MEMDELTAS  = [(0, 0), (0, 0), (0, 0)]
+  THRESHOLD  = [(0, 0), (0, 0), (0, 0)]
+
+  # Initial header
+  header_count = HDREVERY
+
+  # Main monitoring loop
+  iteration = 0
+  try:
+    while True:
+      iteration += 1
+
+      # Print header every HDREVERY iterations
+      if header_count >= HDREVERY and HDREVERY > 0:
+        print_header(COLUMN_FILTER, sysinfo)
+        header_count = 0
+      header_count += 1
+
+      # Collect all data
+      if "IRQ" in COLUMN_FILTER:
+        getIRQ(IRQ, COLUMN_FILTER, sysinfo)
+
+      if any(col in COLUMN_FILTER for col in ["RX", "TX"]):
+        getNetwork(NET, COLUMN_FILTER, INTERFACE)
+
+      if any(col in COLUMN_FILTER for col in ["UFT", "ARM", "Core", "H264", "V3D", "ISP", "TempCore", "TempPMIC", "Vcore"]):
+        getBCM283X(BCM2835, COLUMN_FILTER, STATS_WITH_VOLTS, STATS_WITH_PMIC_TEMP)
+
+      if STATS_CPU_MEM or STATS_CPU_CORE:
+        getProcStats(PROC, COLUMN_FILTER)
+
+      if STATS_CPU_MEM and SIMPLE_UTILISATION:
+        getSimpleCPULoad(CPUSIMPLE, COLUMN_FILTER, PROC, sysinfo)
+
+      if STATS_CPU_MEM and STATS_UTILISATION:
+        getCPULoad(CPU, COLUMN_FILTER, PROC, sysinfo)
+
+      if STATS_CPU_CORE:
+        getCoreStats(CORES, COLUMN_FILTER, PROC)
+
+      if any(col in COLUMN_FILTER for col in ["MEMfree", "MEMused"]):
+        getMemory(MEM, COLUMN_FILTER, INCLUDE_SWAP)
+
+      if STATS_GPU_R or STATS_GPU_M:
+        getGPUMem(GPU, COLUMN_FILTER, STATS_GPU_R, STATS_GPU_M)
+
+      if STATS_DELTAS or STATS_ACCUMULATED:
+        getMemDeltas(MEMDELTAS, COLUMN_FILTER, MEM, GPU)
+
+      if STATS_THRESHOLD:
+        sysinfo["hardware"].GetThresholdValues(THRESHOLD, COLUMN_FILTER, STATS_THRESHOLD_CLEAR)
+
+      # Print data line
+      print_data_line(COLUMN_FILTER, sysinfo, BCM2835, IRQ, NET, CPU, CPUSIMPLE, CORES, MEM, GPU, MEMDELTAS, THRESHOLD, HUMAN_READABLE)
+
+      # Exit after specified iterations
+      if QEVERY > 0 and iteration >= QEVERY:
+        break
+
+      # Sleep until next iteration
+      time.sleep(DELAY)
+
+  except KeyboardInterrupt:
+    print("\nMonitoring stopped by user")
+
+def print_header(columns, sysinfo):
+  """Print the header row for monitoring data"""
+  header_parts = []
+  
+  for col in columns:
+    if col == "UFT":
+      header_parts.append("UFT")
+    elif col == "Vcore":
+      header_parts.append("Vcore")
+    elif col == "ARM":
+      header_parts.append("ARM MHz")
+    elif col == "Core":
+      header_parts.append("Core MHz")
+    elif col == "H264":
+      header_parts.append("H264 MHz")
+    elif col == "V3D":
+      header_parts.append("V3D MHz")
+    elif col == "ISP":
+      header_parts.append("ISP MHz")
+    elif col == "TempCore":
+      header_parts.append("Temp°C")
+    elif col == "TempPMIC":
+      header_parts.append("PMIC°C")
+    elif col == "IRQ":
+      header_parts.append("IRQ/s")
+    elif col == "RX":
+      header_parts.append("RX B/s")
+    elif col == "TX":
+      header_parts.append("TX B/s")
+    elif col in ["CPU", "CPUuser", "CPUnice", "CPUsys", "CPUidle", "CPUiowt", "CPUirq", "CPUs/irq", "CPUtotal"]:
+      header_parts.append(col + "%")
+    elif col == "GPUfree":
+      header_parts.append("GPU MB")
+    elif col in ["MEMfree", "MEMused"]:
+      header_parts.append(col.replace("MEM", "MEM "))
+    elif col == "MEMdelta":
+      header_parts.append("ΔMem")
+    elif col == "MEMaccum":
+      header_parts.append("∑Mem")
+  
+  print(" | ".join(f"{part:>8}" for part in header_parts))
+  print("-" * (len(header_parts) * 11 - 3))
+
+def print_data_line(columns, sysinfo, bcm, irq, net, cpu, cpusimple, cores, mem, gpu, memdeltas, threshold, human_readable):
+  """Print a single line of monitoring data"""
+  data_parts = []
+  
+  for col in columns:
+    if col == "UFT" and threshold[0][0] != 0:
+      flags = ""
+      th = threshold[0][1]
+      flags += "U" if th["under-voltage"][0] else ("u" if th["under-voltage"][1] else " ")
+      flags += "F" if th["arm-capped"][0] else ("f" if th["arm-capped"][1] else " ")
+      flags += "T" if th["throttled"][0] else ("t" if th["throttled"][1] else " ")
+      data_parts.append(flags)
+    elif col == "Vcore" and bcm[0][0] != 0:
+      data_parts.append(f"{bcm[0][1][9]}")
+    elif col == "ARM" and bcm[0][0] != 0:
+      freq = int(bcm[0][1][0] / 1e6)
+      limits = sysinfo["limits"]["arm"]
+      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+    elif col == "Core" and bcm[0][0] != 0:
+      freq = int(bcm[0][1][1] / 1e6)
+      limits = sysinfo["limits"]["core"]
+      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+    elif col == "H264" and bcm[0][0] != 0:
+      freq = int(bcm[0][1][2] / 1e6)
+      limits = sysinfo["limits"]["h264"]
+      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+    elif col == "V3D" and bcm[0][0] != 0:
+      freq = int(bcm[0][1][3] / 1e6)
+      limits = sysinfo["limits"]["v3d"]
+      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+    elif col == "ISP" and bcm[0][0] != 0:
+      freq = int(bcm[0][1][4] / 1e6)
+      limits = sysinfo["limits"]["isp"]
+      data_parts.append(colourise(freq, "%4d", limits[0], None, limits[1], False))
+    elif col == "TempCore" and bcm[0][0] != 0:
+      temp = bcm[0][1][5] / 1000 if bcm[0][1][5] else 0
+      data_parts.append(colourise(temp, "%4.1f", 50, 70, 80, False))
+    elif col == "TempPMIC" and bcm[0][0] != 0:
+      temp = bcm[0][1][7] if bcm[0][1][7] else 0
+      data_parts.append(colourise(temp, "%4.1f", 50, 70, 80, False))
+    elif col == "IRQ" and irq[0][0] != 0:
+      data_parts.append(f"{irq[0][1][0]:>8d}")
+    elif col == "RX" and net[0][0] != 0:
+      if human_readable:
+        data_parts.append(format_bytes(net[0][1][0]))
+      else:
+        data_parts.append(f"{net[0][1][0]:>8d}")
+    elif col == "TX" and net[0][0] != 0:
+      if human_readable:
+        data_parts.append(format_bytes(net[0][1][1]))
+      else:
+        data_parts.append(f"{net[0][1][1]:>8d}")
+    elif col == "CPUtotal" and (cpu[0][0] != 0 or cpusimple[0][0] != 0):
+      if cpusimple[0][0] != 0:
+        total = cpusimple[0][1][3]
+      else:
+        total = cpu[0][1][7]
+      data_parts.append(colourise(total, "%6.2f", 25, 50, 75, False))
+    elif col == "MEMused" and mem[0][0] != 0:
+      data_parts.append(colourise(mem[0][1][2], "%6.2f", 25, 50, 75, False))
+    elif col == "GPUfree" and gpu[0][0] != 0 and "reloc" in gpu[0][1]:
+      free_mb = gpu[0][1]["reloc"][1] / (1024 * 1024)
+      data_parts.append(f"{free_mb:>6.1f}")
+    else:
+      data_parts.append(" " * 8)
+  
+  print(" | ".join(f"{part:>8}" for part in data_parts))
+
+def format_bytes(bytes_val):
+  """Format bytes in human readable format"""
+  if bytes_val >= 1024 * 1024:
+    return f"{bytes_val / (1024 * 1024):>6.1f}M"
+  elif bytes_val >= 1024:
+    return f"{bytes_val / 1024:>6.1f}K"
+  else:
+    return f"{bytes_val:>8d}"
 
 if __name__ == "__main__":
   try:
