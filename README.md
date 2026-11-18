@@ -5,7 +5,7 @@ bcmstat
 
 Advanced Raspberry Pi command line monitoring tool with comprehensive hardware support:
 
-**Latest release: v0.6.1**
+**Latest release: v0.6.2**
 
 This release includes:
 * Corrected available-memory reporting using Linux `MemAvailable`, with a fallback for older kernels.
