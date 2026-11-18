@@ -6,8 +6,7 @@
 * 樹莓派 1、2、3、4、5 及 Pi5+
 * Pi Zero、Pi Zero W、Pi Zero 2W
 * 計算模組 (CM1、CM3、CM3+、CM4、CM4S、CM5、CM5 Lite)
-* Pi400
-* Pi 500
+* Pi400、Pi 500
 * 最高支援 32GB RAM 記憶體配置
 
 ## 監控功能
