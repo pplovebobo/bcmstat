@@ -47,7 +47,7 @@ else:
   import urllib2
 
 GITHUB = "https://raw.github.com/pplovebobo/bcmstat/master"
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 
 VCGENCMD = None
 VCDBGCMD = None
