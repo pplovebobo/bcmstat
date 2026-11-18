@@ -4,7 +4,7 @@ bcmstat
 Advanced Raspberry Pi command line monitoring tool with comprehensive hardware support:
 
 **Supported Hardware:**
-* Raspberry Pi 1, 2, 3, 4, 5, and Pi5+
+* Raspberry Pi 1, 2, 3, 4, 5, Pi5+, and Pi 500
 * Pi Zero, Pi Zero W, Pi Zero 2W
 * Compute Modules (CM1, CM3, CM3+, CM4, CM4S, CM5)
 * Pi400
