@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # bcmstat Installation Script
-# Enhanced version with Pi5 support by pplovebobo
+# Supports Raspberry Pi 5 and Pi 500
 #
 # Usage: curl -sSL https://raw.githubusercontent.com/pplovebobo/bcmstat/master/install.sh | bash
 #
@@ -80,7 +80,7 @@ main() {
         print_status "Installing to ~/bin/bcmstat (user-local)..."
         mkdir -p ~/bin
         mv /tmp/bcmstat.sh ~/bin/bcmstat
-        INSTALL_PATH="~/bin/bcmstat"
+        INSTALL_PATH="$HOME/bin/bcmstat"
         
         # Add to PATH if not already there
         if [[ ":$PATH:" != *":$HOME/bin:"* ]]; then
@@ -103,7 +103,7 @@ main() {
     
     # Test basic functionality
     print_status "Testing basic functionality..."
-    if ${PYTHON_CMD} ${INSTALL_PATH} -h >/dev/null 2>&1; then
+    if "${PYTHON_CMD}" "${INSTALL_PATH}" -h >/dev/null 2>&1; then
         print_status "✓ Basic test passed!"
     else
         print_warning "Basic test failed. You may need to run with sudo for full functionality."
@@ -118,7 +118,7 @@ main() {
     
     echo ""
     print_status "Installation complete! You can now run bcmstat."
-    print_status "For Chinese documentation, visit: https://github.com/pplovebobo/bcmstat"
+    print_status "For Traditional Chinese documentation, visit: https://github.com/pplovebobo/bcmstat/blob/master/README-ZHTW.MD"
 }
 
 main "$@"
