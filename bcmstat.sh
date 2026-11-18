@@ -95,10 +95,10 @@ class RPIHardware():
     # Note: Memory sizes and processors updated to support current and future Raspberry Pi models
     self.memsizes = ["256MB", "512MB", "1GB", "2GB", "4GB", "8GB", "16GB", "32GB"]
     self.manufacturers = ["Sony UK", "Egoman", "Embest", "Sony Japan", "Embest", "Stadium", "Sony UK"]
-    self.processors = ["2835", "2836", "2837", "2838", "2711", "2712"]
+    self.processors = ["2835", "2836", "2837", "2711", "2712", "2712"]
     self.models = ["Model A", "Model B", "Model A+", "Model B+", "Pi2 Model B", "Alpha", "CM1", "Unknown", 
                    "Pi3", "Pi0", "CM3", "Unknown", "Pi0 W", "Pi3 Model B+", "Pi3 Model A+", "Unknown", 
-                   "CM3+", "Pi4 Model B", "Pi0 2W", "CM4", "Pi400", "Pi4 Model A", "Pi5 Model B", "CM5", "Unknown", "Pi500"]
+                   "CM3+", "Pi4 Model B", "Pi0 2W", "Pi400", "CM4", "CM4S", "Unknown", "Pi5 Model B", "CM5", "Pi500", "CM5 Lite"]
     self.pcbs = ["Unknown", "Pi3 Rev1.0", "Pi3 Rev1.2", "Pi2 2837 Rev1.1", "Pi2 2836", "Pi1 B+ Rev 1.1", 
                  "Pi0", "Pi1 B Rev2.0", "Pi2 (2837) Rev1.0", "Pi0 W", "Pi2 (2837) Rev1.2", "Pi3 B+", 
                  "Pi4 B Rev1.1", "Pi4 B Rev1.2", "Pi4 B Rev1.4", "Pi4 B Rev1.5", "Pi0 2W", "CM4 Rev1.0", 
@@ -261,7 +261,7 @@ class RPIHardware():
       pcb = 19
     elif (pcb_base & 0xfffff0) in [0xc04170, 0xd04170]:  # Pi5
       pcb = 20
-    elif pcb_base == 0xd04190:  # Raspberry Pi 500 (8GB)
+    elif self.hardware_raw["new"] == 1 and self.hardware_raw["processor"] == 4 and self.hardware_raw["type"] == 0x19:  # Raspberry Pi 500 family
       pcb = 21
     else:
       pcb = 0
