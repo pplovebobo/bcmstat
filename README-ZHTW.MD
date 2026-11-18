@@ -241,9 +241,12 @@ sudo usermod -a -G video $USER
 
 ## 版本資訊
 
-### 目前版本：0.6.1
+### 目前版本：0.6.2
 
 ### 最新更新內容 (2026年版本)
+
+#### v0.6.2 更新重點
+- 新增 CM5 與 CM5 Lite 的 PCB Revision 辨識，支援官方 Revision Code（Type 0x18、0x1A）。
 
 #### v0.6.1 更新重點
 - **記憶體統計修正**：優先使用 Linux `MemAvailable` 顯示可用記憶體，並保留舊版核心的相容性備援
