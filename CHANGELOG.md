@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 0.6.2 (18/11/2026)
+* Fix: Identify Compute Module 5 and Compute Module 5 Lite PCB revisions (board types 0x18 and 0x1A).
+
+
 ## Version 0.6.1 (18/11/2026)
 * Fix: Use MemAvailable for accurate Linux available-memory reporting, with a fallback for older kernels.
 * Fix: Correct MEMfree to display available memory and keep MEMused as the usage percentage.
