@@ -1,5 +1,11 @@
 # Changelog
 
+## Version 0.6.1 (18/11/2026)
+* Fix: Use MemAvailable for accurate Linux available-memory reporting, with a fallback for older kernels.
+* Fix: Correct MEMfree to display available memory and keep MEMused as the usage percentage.
+* Fix: Make D/A memory-delta tracking collect required RAM/GPU samples and tolerate unavailable GPU reloc data.
+* Add: Raspberry Pi 500 hardware identification (BCM2712, 8GB revision code).
+
 ## Version 0.6.0 (05/07/2025)
 * Add: Raspberry Pi 5 and Pi5+ support with BCM2711/BCM2712 processors
 * Add: Extended memory support up to 32GB (previously limited to 8GB)
