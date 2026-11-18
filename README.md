@@ -1,6 +1,8 @@
 bcmstat
 =======
 
+[繁體中文](README-ZHTW.MD)
+
 Advanced Raspberry Pi command line monitoring tool with comprehensive hardware support:
 
 **Latest release: v0.6.1**
