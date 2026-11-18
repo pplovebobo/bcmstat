@@ -13,10 +13,11 @@ This release includes:
 * Added Raspberry Pi 500 hardware identification (BCM2712), and corrected related Pi 4/Pi 5/Compute Module model mappings.
 
 **Supported Hardware:**
-* Raspberry Pi 1, 2, 3, 4, 5, Pi5+, and Pi 500
+* Raspberry Pi 1, 2, 3, 4, 5, and Pi5+
 * Pi Zero, Pi Zero W, Pi Zero 2W
-* Compute Modules (CM1, CM3, CM3+, CM4, CM4S, CM5)
+* Compute Modules (CM1, CM3, CM3+, CM4, CM4S, CM5, CM5 Lite)
 * Pi400
+* Pi 500
 * Memory configurations up to 32GB RAM
 
 **Monitoring Features:**
