@@ -47,7 +47,7 @@ else:
   import urllib2
 
 GITHUB = "https://raw.github.com/pplovebobo/bcmstat/master"
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 VCGENCMD = None
 VCDBGCMD = None
@@ -98,11 +98,11 @@ class RPIHardware():
     self.processors = ["2835", "2836", "2837", "2838", "2711", "2712"]
     self.models = ["Model A", "Model B", "Model A+", "Model B+", "Pi2 Model B", "Alpha", "CM1", "Unknown", 
                    "Pi3", "Pi0", "CM3", "Unknown", "Pi0 W", "Pi3 Model B+", "Pi3 Model A+", "Unknown", 
-                   "CM3+", "Pi4 Model B", "Pi0 2W", "CM4", "Pi400", "Pi4 Model A", "Pi5 Model B", "CM5"]
+                   "CM3+", "Pi4 Model B", "Pi0 2W", "CM4", "Pi400", "Pi4 Model A", "Pi5 Model B", "CM5", "Unknown", "Pi500"]
     self.pcbs = ["Unknown", "Pi3 Rev1.0", "Pi3 Rev1.2", "Pi2 2837 Rev1.1", "Pi2 2836", "Pi1 B+ Rev 1.1", 
                  "Pi0", "Pi1 B Rev2.0", "Pi2 (2837) Rev1.0", "Pi0 W", "Pi2 (2837) Rev1.2", "Pi3 B+", 
                  "Pi4 B Rev1.1", "Pi4 B Rev1.2", "Pi4 B Rev1.4", "Pi4 B Rev1.5", "Pi0 2W", "CM4 Rev1.0", 
-                 "Pi400", "CM4S", "Pi5 B Rev1.0"]
+                 "Pi400", "CM4S", "Pi5 B Rev1.0", "Pi500 Rev1.0"]
 
     self.set_rev_code(rev_code)
 #    self.dump()
@@ -261,6 +261,8 @@ class RPIHardware():
       pcb = 19
     elif (pcb_base & 0xfffff0) in [0xc04170, 0xd04170]:  # Pi5
       pcb = 20
+    elif pcb_base == 0xd04190:  # Raspberry Pi 500 (8GB)
+      pcb = 21
     else:
       pcb = 0
     self.hardware_raw["pcb"] = pcb
@@ -763,36 +765,28 @@ def getBCM283X(storage, filter, STATS_WITH_VOLTS, STATS_WITH_PMIC_TEMP):
     storage[0] = (dTime, s1[1])
 
 def getMemory(storage, filter, include_swap):
-  MEMTOTAL = 0
-  MEMFREE = 0
-  MEMUSED = 0
-  MEMDIFF = 0
-  SWAPTOTAL = 0
-  SWAPFREE = 0
-  SWAPCACHED= 0
-
+  # /proc/meminfo reports values in kB. MemAvailable is the best estimate
+  # of memory that can be allocated without swapping; fall back to the
+  # traditional cache/buffer estimate on older kernels.
+  values = {}
   for line in readfile("/proc/meminfo").split("\n"):
-    field_groups = re.search("^(.*):[ ]*([0-9]*) .*$", line)
-    if field_groups.group(1) in ["MemFree", "Buffers", "Cached", "SReclaimable"]:
-      MEMFREE += int(field_groups.group(2))
-    elif field_groups.group(1) == "MemTotal":
-      MEMTOTAL = int(field_groups.group(2))
-    elif include_swap and field_groups.group(1) == "SwapTotal":
-      SWAPTOTAL += int(field_groups.group(2))
-    elif include_swap and field_groups.group(1) == "SwapFree":
-      SWAPFREE += int(field_groups.group(2))
-    elif include_swap and field_groups.group(1) == "SwapCached":
-      SWAPCACHED += int(field_groups.group(2))
+    match = re.match(r"^([A-Za-z_]+):\s+(\d+)", line)
+    if match:
+      values[match.group(1)] = int(match.group(2))
 
-  MEMTOTAL += SWAPTOTAL
-  MEMFREE += SWAPFREE
-
-  MEMUSED = (1-(float(MEMFREE)/float(MEMTOTAL)))*100
-
-  if SWAPTOTAL != 0:
-    SWAPUSED = (1-(float(SWAPFREE)/float(SWAPTOTAL)))*100
+  MEMTOTAL = values.get("MemTotal", 0)
+  if "MemAvailable" in values:
+    MEMFREE = values["MemAvailable"]
   else:
-    SWAPUSED = None
+    MEMFREE = sum(values.get(key, 0) for key in ["MemFree", "Buffers", "Cached", "SReclaimable"])
+
+  SWAPTOTAL = values.get("SwapTotal", 0) if include_swap else 0
+  SWAPFREE = values.get("SwapFree", 0) if include_swap else 0
+  MEMTOTAL += SWAPTOTAL
+  MEMFREE = min(MEMTOTAL, MEMFREE + SWAPFREE)
+
+  MEMUSED = ((float(MEMTOTAL - MEMFREE) / float(MEMTOTAL)) * 100) if MEMTOTAL else 0.0
+  SWAPUSED = ((1 - (float(SWAPFREE) / float(SWAPTOTAL))) * 100) if SWAPTOTAL else None
 
   storage[2] = storage[1]
   storage[1] = (time.time(), [MEMTOTAL, MEMFREE, MEMUSED, SWAPUSED])
@@ -866,7 +860,14 @@ def getMemDeltas(storage, filter, MEM, GPU):
     dTime = s1[0] - s2[0]
     dTime = 1 if dTime <= 0 else dTime
     dMem = s1[1][1][1] - s2[1][1][1]
-    dGPU = s1[2][1]["reloc"][1] - s2[2][1]["reloc"][1]
+
+    # GPU reloc statistics are optional on newer firmware and may be
+    # unavailable (or not yet sampled). Do not let that break RAM deltas.
+    gpu_now = s1[2][1] if len(s1[2]) > 1 and isinstance(s1[2][1], dict) else {}
+    gpu_prev = s2[2][1] if len(s2[2]) > 1 and isinstance(s2[2][1], dict) else {}
+    reloc_now = gpu_now.get("reloc")
+    reloc_prev = gpu_prev.get("reloc")
+    dGPU = reloc_now[1] - reloc_prev[1] if reloc_now and reloc_prev else 0
     storage[0] = (dTime, (dMem, dGPU, storage[0][1][2] + dMem, storage[0][1][3] + dGPU))
 
 def ceildiv(a, b):
@@ -1476,6 +1477,19 @@ def main(args):
       printn("Sorry, don't understand option [%s] - exiting" % a1)
       sys.exit(2)
 
+  # D/A leak tracking needs RAM and GPU reloc samples. Enable collectors
+  # even when a custom -o list omits their display columns.
+  if STATS_DELTAS or STATS_ACCUMULATED:
+    STATS_GPU_R = True
+    required_cols = ["MEMfree", "GPUfree"]
+    if STATS_DELTAS:
+      required_cols.append("MEMdelta")
+    if STATS_ACCUMULATED:
+      required_cols.append("MEMaccum")
+    for required_col in required_cols:
+      if required_col not in COLUMN_FILTER:
+        COLUMN_FILTER.append(required_col)
+
   if CHECK_UPDATE:
     path = os.path.realpath(__file__)
     dir = os.path.dirname(path)
@@ -1560,7 +1574,7 @@ def main(args):
       if any(col in COLUMN_FILTER for col in ["MEMfree", "MEMused"]):
         getMemory(MEM, COLUMN_FILTER, INCLUDE_SWAP)
 
-      if STATS_GPU_R or STATS_GPU_M:
+      if (STATS_GPU_R or STATS_GPU_M) and VCGENCMD and (VCGENCMD_GET_MEM or VCDBGCMD):
         getGPUMem(GPU, COLUMN_FILTER, STATS_GPU_R, STATS_GPU_M)
 
       if STATS_DELTAS or STATS_ACCUMULATED:
@@ -1790,7 +1804,10 @@ def print_data_line(columns, sysinfo, bcm, irq, net, cpu, cpusimple, cores, mem,
         data_parts.append(" " * 8)
     elif col == "MEMfree":
       if mem[0][0] != 0:
-        data_parts.append(f"{mem[0][1][2]:>8.2f}")
+        if human_readable:
+          data_parts.append(f"{format_bytes(mem[0][1][1] * 1024):>8}")
+        else:
+          data_parts.append(f"{mem[0][1][1]:>8d}")
       else:
         data_parts.append(" " * 8)
     elif col == "MEMused":
