@@ -102,7 +102,7 @@ class RPIHardware():
     self.pcbs = ["Unknown", "Pi3 Rev1.0", "Pi3 Rev1.2", "Pi2 2837 Rev1.1", "Pi2 2836", "Pi1 B+ Rev 1.1", 
                  "Pi0", "Pi1 B Rev2.0", "Pi2 (2837) Rev1.0", "Pi0 W", "Pi2 (2837) Rev1.2", "Pi3 B+", 
                  "Pi4 B Rev1.1", "Pi4 B Rev1.2", "Pi4 B Rev1.4", "Pi4 B Rev1.5", "Pi0 2W", "CM4 Rev1.0", 
-                 "Pi400", "CM4S", "Pi5 B Rev1.0", "Pi500 Rev1.0"]
+                 "Pi400", "CM4S", "Pi5 B Rev1.0", "Pi500 Rev1.0", "CM5 Rev1.0", "CM5 Lite Rev1.0"]
 
     self.set_rev_code(rev_code)
 #    self.dump()
@@ -261,8 +261,12 @@ class RPIHardware():
       pcb = 19
     elif (pcb_base & 0xfffff0) in [0xc04170, 0xd04170]:  # Pi5
       pcb = 20
+    elif self.hardware_raw["new"] == 1 and self.hardware_raw["processor"] == 4 and self.hardware_raw["type"] == 0x18:  # Compute Module 5
+      pcb = 22
     elif self.hardware_raw["new"] == 1 and self.hardware_raw["processor"] == 4 and self.hardware_raw["type"] == 0x19:  # Raspberry Pi 500 family
       pcb = 21
+    elif self.hardware_raw["new"] == 1 and self.hardware_raw["processor"] == 4 and self.hardware_raw["type"] == 0x1a:  # Compute Module 5 Lite
+      pcb = 23
     else:
       pcb = 0
     self.hardware_raw["pcb"] = pcb
