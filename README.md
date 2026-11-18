@@ -3,6 +3,13 @@ bcmstat
 
 Advanced Raspberry Pi command line monitoring tool with comprehensive hardware support:
 
+**Latest release: v0.6.1**
+
+This release includes:
+* Corrected available-memory reporting using Linux `MemAvailable`, with a fallback for older kernels.
+* Fixed memory delta/accumulation monitoring when GPU relocation statistics are unavailable.
+* Added Raspberry Pi 500 hardware identification (BCM2712), and corrected related Pi 4/Pi 5/Compute Module model mappings.
+
 **Supported Hardware:**
 * Raspberry Pi 1, 2, 3, 4, 5, Pi5+, and Pi 500
 * Pi Zero, Pi Zero W, Pi Zero 2W
